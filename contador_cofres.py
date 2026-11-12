@@ -50,14 +50,11 @@ import keyboard
 from PIL import Image, ImageSequence, ImageTk
 
 NOMBRE_APP = "Tokeneado el pana"
-VERSION = "1.1"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
+VERSION = "1.0"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
 
 # Novedades de cada version: se le muestran al usuario UNA vez, apenas se actualiza.
 # En cada version nueva se agrega una entrada arriba.
 NOVEDADES = {
-    "1.1": [
-        "Version de prueba: si ves esto, las actualizaciones funcionan.",
-    ],
     "1.0": [
         "Actualizaciones automaticas: cuando haya algo nuevo te va a aparecer un aviso.",
         "Soporte para mando de Xbox (X mantenido = cofre).",
