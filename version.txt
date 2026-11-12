@@ -1,2 +1,2 @@
-1.0
-Primera version con actualizacion online.
+1.1
+Version de prueba del actualizador.
