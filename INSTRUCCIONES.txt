@@ -1,0 +1,136 @@
+TOKENEADO EL PANA - CONTADOR DE COFRES FORTNITE
+================================================
+creado x weasrandomexe
+
+QUE NECESITAS
+- Python instalado (python.org), con la casilla "Add python.exe to PATH"
+  marcada al instalarlo.
+- Esta carpeta completa, descomprimida (no la abras desde dentro del .zip).
+
+COMO INICIARLO
+1. Haz doble clic en iniciar_contador.bat.
+2. La primera vez se abre una ventana negra unos segundos mientras instala
+   lo necesario. Espera a que termine.
+3. Aparece la ventana flotante con las fotos y el contador.
+4. Pon Fortnite en "Pantalla completa en ventana" para que la ventana se
+   vea encima del juego.
+
+TECLAS POR DEFECTO (funcionan mientras juegas, se pueden cambiar)
+- E mantenida medio segundo -> suma 1 cofre automaticamente.
+- F8  -> suma 1 cofre a mano.
+- F7  -> resta 1 (para corregir errores).
+- F9  -> muestra u oculta la foto (el contador queda visible).
+- F10 -> cierra el contador y guarda.
+- F12 -> reinicia TODO a 0 (sesion, hoy y total). Para evitar accidentes
+         hay que apretarla 2 veces: la primera muestra un aviso en rojo y
+         tienes 3 segundos para apretarla otra vez. Antes de borrar se
+         guarda una copia en respaldo_cofres_FECHA.csv.
+
+MANDO DE XBOX
+- Funciona con mandos de Xbox One / Series (con cable, Bluetooth o
+  adaptador) y otros mandos compatibles con Xbox. No hay que instalar nada.
+- Abajo del contador dice "Mando: conectado" en verde cuando lo detecta.
+- Botones por defecto:
+    X mantenido medio segundo -> suma 1 cofre (X es "interactuar" en
+                                 Fortnite, igual que la E en teclado)
+    View + flecha arriba      -> suma 1
+    View + flecha abajo       -> resta 1
+    View + flecha izquierda   -> muestra u oculta la foto
+    View + flecha derecha     -> reinicia todo (2 veces seguidas, igual
+                                 que F12)
+  "View" es el boton chico de la izquierda, con dos cuadraditos.
+  Manten View y aprieta la flecha.
+- OJO: en Fortnite el boton View abre el mapa. Si te molesta, cambia las
+  combinaciones en "Teclas" (por ejemplo LB + RB + flecha).
+- El teclado sigue funcionando igual: puedes usar los dos.
+
+CON EL MOUSE SOBRE LA VENTANA
+- Mantener clic y arrastrar  -> mover la ventana a donde quieras.
+- Rueda del mouse            -> agrandar o achicar la foto.
+- Ctrl + rueda               -> mas o menos transparente.
+- Botones de arriba:
+    < >     foto anterior / siguiente
+    Foto    ocultar o mostrar la foto
+    - +     achicar / agrandar
+    Anadir  agregar fotos o GIFs
+    Teclas  cambiar las teclas, los botones del mando y el conteo
+            con la E / X
+    X       cerrar
+- Botones +1 y -1 al lado del numero.
+
+CAMBIAR LAS TECLAS
+1. Aprieta el boton azul "Teclas" arriba de la ventana.
+2. Al lado de la accion que quieras cambiar, aprieta "Cambiar".
+3. Aprieta la tecla nueva (o una combinacion, como Ctrl+F8). Esc cancela.
+4. Aprieta "Listo". Las teclas quedan guardadas para la proxima vez.
+- Si eliges una tecla que ya usa otra accion, te avisa y no la cambia.
+- La tecla de "Abrir cofre" tiene que ser una sola tecla, sin combinaciones.
+
+CAMBIAR LOS BOTONES DEL MANDO (en la misma ventana "Teclas")
+1. Conecta el mando (arriba a la derecha de esa parte tiene que decir
+   "Mando: conectado").
+2. Al lado de la accion, aprieta "Cambiar".
+3. En el mando, aprieta los botones juntos (por ejemplo View + flecha
+   arriba) y suelta. Para "Abrir cofre" aprieta UN solo boton.
+   Si no aprietas nada en 8 segundos, se cancela.
+- La X roja al lado de "Cambiar" deja esa accion sin boton en el mando.
+- "Usar el mando" desmarcado = el programa ignora el mando.
+- Usa combinaciones para las acciones, asi no chocan con el juego. Si
+  pones un solo boton, el programa te avisa.
+- Gatillos: LT y RT tambien se pueden usar.
+
+ABRIR COFRES CON LA E O LA X (en la misma ventana "Teclas")
+- "Contar solo al mantener la tecla": si la desmarcas, la E y la X del
+  mando dejan de contar y solo cuentas a mano.
+- "Segundos que hay que mantenerla": de 0,2 a 2 segundos (viene en 0,5).
+    Menos tiempo -> cuenta mas rapido, pero puede contar cosas cortas.
+    Mas tiempo   -> mas seguro, pero tienes que mantenerla mas.
+- El tiempo vale igual para la E del teclado y la X del mando.
+- "Restaurar" vuelve todo a como venia: teclas, botones del mando, conteo
+  activado y 0,5 segundos.
+
+FOTOS Y GIFS
+- Las fotos cambian solas cada 8 segundos. Los GIF se ven animados.
+- Para agregar: boton verde "Anadir", eliges uno o varios archivos y
+  aparecen al tiro. Se copian a la carpeta "fotos".
+- Tambien puedes meterlas directo en la carpeta "fotos" (en ese caso
+  cierra y vuelve a abrir el contador).
+- Para quitar una, borrala de la carpeta "fotos" y vuelve a abrir.
+
+QUE CUENTA Y QUE NO
+- No cuentan los toques rapidos de E / X, como abrir puertas, recoger
+  objetos o recargar.
+- Si pueden contar otras cosas que se abren manteniendo la E: cajas de
+  municion, drops o revivir a un companero. En esos casos aprieta F7.
+
+ACTUALIZACIONES
+- Cada vez que abres el contador, revisa en internet si hay una version
+  nueva. Si hay, aparece un aviso: aprieta "Actualizar" y se reinicia
+  solo con la version nueva. "Ahora no" lo deja para la proxima.
+- Tu conteo, fotos, teclas y botones del mando NO se borran.
+- Apenas se actualiza, aparece una ventana "¡Se actualizo!" con las
+  novedades de la version nueva (solo esa vez).
+- La version que tienes aparece abajo, al lado de "creado x weasrandomexe".
+- Si no hay internet, el contador abre normal.
+- Por si acaso, la version anterior queda guardada como
+  contador_cofres_respaldo.py.
+
+DONDE QUEDA GUARDADO
+- Cada cofre se guarda con fecha y hora en cofres_registro.csv. Se puede
+  abrir con Excel. El total se mantiene aunque apagues el PC.
+- El tamano, la transparencia, la posicion, las teclas y los ajustes de la
+  E se guardan en config.json, asi que se abre igual que lo dejaste.
+
+SI ALGO NO FUNCIONA
+- Si no aparece la ventana: revisa que Python este instalado y que la
+  carpeta este descomprimida.
+- Si el mando no aparece como conectado: desconectalo y vuelve a
+  conectarlo, o prueba con cable. Mandos de PlayStation no se detectan
+  directo (solo si usas un programa como DS4Windows que los hace pasar
+  por mando de Xbox).
+- Si las teclas no responden con el juego abierto: haz clic derecho en
+  iniciar_contador.bat y elige "Ejecutar como administrador".
+- Si Windows muestra "Windows protegio su PC": aprieta "Mas informacion"
+  y luego "Ejecutar de todas formas".
+- Si la ventana quedo fuera de la pantalla: borra config.json y vuelve
+  a abrir el contador.
