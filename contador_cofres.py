@@ -50,11 +50,16 @@ import keyboard
 from PIL import Image, ImageSequence, ImageTk
 
 NOMBRE_APP = "Tokeneado el pana"
-VERSION = "1.4"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
+VERSION = "1.5"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
 
 # Novedades de cada version: se le muestran al usuario UNA vez, apenas se actualiza.
 # En cada version nueva se agrega una entrada arriba.
 NOVEDADES = {
+    "1.5": [
+        "Estado en Discord: tus amigos ven \"El pana se esta tokeneando\" y cuantos cofres llevas.",
+        "Se puede apagar en \"Teclas\" > \"Mostrar mis cofres en mi estado de Discord\".",
+        "Necesitas tener Discord abierto en el PC.",
+    ],
     "1.4": [
         "Nuevo tamano: arrastra la esquina ◢ de abajo a la derecha para agrandar o achicar todo.",
         "El titulo y el numero ahora crecen junto con la ventana.",
@@ -523,6 +528,138 @@ def logros_nuevos(stats, desbloqueados):
     return [l for l in LOGROS if l[0] not in desbloqueados and progreso_logro(l, stats)[0] >= l[4]]
 
 
+# ======================================================================
+# Estado en Discord (Rich Presence)
+# Habla directo con la app de Discord del PC, no hay que instalar nada.
+# ======================================================================
+DISCORD_APP_ID = "1570905199713853610"
+DISCORD_IMAGEN = "pana"            # nombre de la imagen subida en "Rich Presence > Art Assets"
+DISCORD_SEGUNDOS_ENTRE_CAMBIOS = 15   # Discord no deja cambiar el estado mas seguido
+
+
+def formato_miles(n):
+    return f"{n:,}".replace(",", ".")
+
+
+class DiscordRPC(threading.Thread):
+    """Mantiene la conexion con Discord y actualiza el estado cuando cambia el conteo."""
+
+    def __init__(self, app_id):
+        super().__init__(daemon=True)
+        self.app_id = app_id
+        self.activo = True
+        self.pendiente = None        # ultimo estado que hay que mandar
+        self.enviado = None
+        self.ultimo_envio = 0.0
+        self.conectado = False
+        self._conexion = None
+        self._lock = threading.Lock()
+        self.inicio = int(time.time())
+
+    # --- transporte: tuberia con nombre en Windows, socket en Linux/Mac ---
+    def _abrir(self):
+        for i in range(10):
+            try:
+                if os.name == "nt":
+                    con = open(rf"\\?\pipe\discord-ipc-{i}", "r+b", buffering=0)
+                    self._escribir_raw = con.write
+                    self._leer_raw = con.read
+                else:
+                    import socket
+                    base = (os.environ.get("XDG_RUNTIME_DIR") or os.environ.get("TMPDIR")
+                            or os.environ.get("TMP") or "/tmp")
+                    con = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    con.connect(os.path.join(base, f"discord-ipc-{i}"))
+                    self._escribir_raw = con.sendall
+                    self._leer_raw = con.recv
+                return con
+            except (OSError, ValueError):
+                continue
+        return None
+
+    def _leer_exacto(self, n):
+        datos = b""
+        while len(datos) < n:
+            parte = self._leer_raw(n - len(datos))
+            if not parte:
+                raise OSError("Discord cerro la conexion")
+            datos += parte
+        return datos
+
+    def _mandar(self, op, carga):
+        import struct
+        cuerpo = json.dumps(carga).encode("utf-8")
+        self._escribir_raw(struct.pack("<II", op, len(cuerpo)) + cuerpo)
+        op_r, largo = struct.unpack("<II", self._leer_exacto(8))
+        respuesta = json.loads(self._leer_exacto(largo).decode("utf-8"))
+        if op_r == 2:   # Discord cerro la conexion (por ejemplo, ID de aplicacion malo)
+            raise OSError(respuesta.get("message", "cerrado"))
+        return respuesta
+
+    def _conectar(self):
+        con = self._abrir()
+        if con is None:
+            return False
+        self._conexion = con
+        try:
+            self._mandar(0, {"v": 1, "client_id": self.app_id})   # saludo
+        except (OSError, ValueError):
+            self._cerrar()
+            return False
+        self.conectado = True
+        self.enviado = None
+        return True
+
+    def _cerrar(self):
+        self.conectado = False
+        try:
+            if self._conexion:
+                self._conexion.close()
+        except OSError:
+            pass
+        self._conexion = None
+
+    # --- lo que usa el programa ---
+    def actualizar(self, detalles, estado, texto_imagen):
+        with self._lock:
+            self.pendiente = (detalles, estado, texto_imagen)
+
+    def apagar(self):
+        self.activo = False
+        self._cerrar()
+
+    def run(self):
+        espera_reconexion = 0
+        while self.activo:
+            if not self.conectado:
+                if time.time() >= espera_reconexion:
+                    if not self._conectar():
+                        espera_reconexion = time.time() + 20   # Discord cerrado: reintentar en 20 s
+                time.sleep(1)
+                continue
+            with self._lock:
+                pendiente = self.pendiente
+            listo_para_enviar = time.time() - self.ultimo_envio >= DISCORD_SEGUNDOS_ENTRE_CAMBIOS
+            if pendiente and pendiente != self.enviado and listo_para_enviar:
+                detalles, estado, texto_imagen = pendiente
+                actividad = {
+                    "details": detalles,
+                    "state": estado,
+                    "timestamps": {"start": self.inicio},
+                    "assets": {"large_image": DISCORD_IMAGEN, "large_text": texto_imagen},
+                }
+                try:
+                    self._mandar(1, {"cmd": "SET_ACTIVITY",
+                                     "args": {"pid": os.getpid(), "activity": actividad},
+                                     "nonce": f"{time.time():.6f}"})
+                    self.enviado = pendiente
+                    self.ultimo_envio = time.time()
+                except (OSError, ValueError):
+                    self._cerrar()
+                    espera_reconexion = time.time() + 5
+            time.sleep(1)
+
+
 # ---------- Ventana principal ----------
 class Superposicion:
     def __init__(self, root):
@@ -626,6 +763,8 @@ class Superposicion:
         self.registrar_teclas()
         self.lector = LectorMando(self.mando_apretar, self.mando_soltar)
         self.lector.start()
+        self.discord = None
+        self.iniciar_o_parar_discord()
         self.mostrar_u_ocultar_foto()
         self.actualizar()
         self.programar_cambio_foto()
@@ -857,6 +996,11 @@ class Superposicion:
                        selectcolor=FONDO, activebackground=BARRA, activeforeground=TEXTO,
                        anchor="w").pack(fill="x", padx=8)
 
+        self.var_discord = tk.BooleanVar(value=bool(self.cfg.get("discord", True)))
+        tk.Checkbutton(cofre, text="Mostrar mis cofres en mi estado de Discord", variable=self.var_discord,
+                       command=self.guardar_discord, font=("Segoe UI", 9), fg=TEXTO, bg=BARRA,
+                       selectcolor=FONDO, activebackground=BARRA, activeforeground=TEXTO,
+                       anchor="w").pack(fill="x", padx=8)
         tk.Label(cofre, text="Segundos que hay que mantenerla:", font=("Segoe UI", 9), fg=TEXTO,
                  bg=BARRA, anchor="w").pack(fill="x", padx=10, pady=(4, 0))
         self.var_segundos = tk.DoubleVar(value=float(self.cfg.get("segundos_cofre", 0.5)))
@@ -887,6 +1031,11 @@ class Superposicion:
                 self.lbl_titulo_cofre.config(text=f"Abrir cofres con la {tecla}")
             else:
                 self.lbl_titulo_cofre.config(text=f"Abrir cofres con la {tecla} o la {boton} del mando")
+
+    def guardar_discord(self):
+        self.cfg["discord"] = bool(self.var_discord.get())
+        guardar_config(self.cfg)
+        self.iniciar_o_parar_discord()
 
     def guardar_ajustes_cofre(self):
         self.cfg["auto_cofre"] = bool(self.var_auto.get())
@@ -1329,6 +1478,7 @@ class Superposicion:
         guardar_registro(self.filas)
         self.confirmando = False
         self.actualizar()
+        self.estado_discord()
 
     def cancelar_reinicio(self):
         self.confirmando = False
@@ -1340,6 +1490,24 @@ class Superposicion:
         guardar_registro(self.filas)
         self.actualizar()
         self.revisar_logros()
+        self.estado_discord()
+
+    # --- discord ---
+    def iniciar_o_parar_discord(self):
+        quiere = self.cfg.get("discord", True) and DISCORD_APP_ID.isdigit()
+        if quiere and not self.discord:
+            self.discord = DiscordRPC(DISCORD_APP_ID)
+            self.discord.start()
+            self.estado_discord()
+        elif not quiere and self.discord:
+            self.discord.apagar()
+            self.discord = None
+
+    def estado_discord(self):
+        if self.discord:
+            self.discord.actualizar("El pana se está tokeneando",
+                                    f"Lleva {formato_miles(len(self.filas))} cofres en total",
+                                    f"{NOMBRE_APP} v{VERSION}")
 
     # --- logros ---
     def revisar_logros_inicio(self):
@@ -1545,6 +1713,7 @@ class Superposicion:
             self.sesion -= 1
             guardar_registro(self.filas)
             self.actualizar()
+            self.estado_discord()
 
     def revisar_eventos(self):
         while not eventos.empty():
@@ -1578,6 +1747,8 @@ class Superposicion:
         guardar_registro(self.filas)
         self.guardar_posicion()
         keyboard.unhook_all()
+        if self.discord:
+            self.discord.apagar()
         self.root.destroy()
 
 

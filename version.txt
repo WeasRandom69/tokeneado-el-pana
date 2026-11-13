@@ -1,2 +1,2 @@
-1.4
-Nuevo: arrastra la esquina de abajo a la derecha para cambiar el tamano de todo.
+1.5
+Nuevo: tu estado de Discord muestra "El pana se esta tokeneando" y cuantos cofres llevas.
