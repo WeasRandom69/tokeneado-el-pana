@@ -1,2 +1,2 @@
-1.5
-Nuevo: tu estado de Discord muestra "El pana se esta tokeneando" y cuantos cofres llevas.
+1.6
+Discord: tu estado va turnando tus estadisticas y tiene un boton para que otros descarguen el contador.

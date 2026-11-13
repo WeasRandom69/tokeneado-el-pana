@@ -50,11 +50,15 @@ import keyboard
 from PIL import Image, ImageSequence, ImageTk
 
 NOMBRE_APP = "Tokeneado el pana"
-VERSION = "1.5"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
+VERSION = "1.6"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
 
 # Novedades de cada version: se le muestran al usuario UNA vez, apenas se actualiza.
 # En cada version nueva se agrega una entrada arriba.
 NOVEDADES = {
+    "1.6": [
+        "Tu estado de Discord ahora va turnando: total, cofres de hoy, logros, record y racha.",
+        "Los que vean tu estado tienen un boton \"Quiero tokenearme\" para descargar el contador.",
+    ],
     "1.5": [
         "Estado en Discord: tus amigos ven \"El pana se esta tokeneando\" y cuantos cofres llevas.",
         "Se puede apagar en \"Teclas\" > \"Mostrar mis cofres en mi estado de Discord\".",
@@ -535,6 +539,13 @@ def logros_nuevos(stats, desbloqueados):
 DISCORD_APP_ID = "1570905199713853610"
 DISCORD_IMAGEN = "pana"            # nombre de la imagen subida en "Rich Presence > Art Assets"
 DISCORD_SEGUNDOS_ENTRE_CAMBIOS = 15   # Discord no deja cambiar el estado mas seguido
+DISCORD_SEGUNDOS_ROTACION = 20        # cada cuanto cambia la linea de abajo del estado
+# Boton que ven los demas en tu estado de Discord (maximo 32 letras en el texto)
+DISCORD_BOTONES = [
+    {"label": "Quiero tokenearme",
+     "url": f"https://github.com/{USUARIO_GITHUB}/{REPO_GITHUB}/raw/{RAMA_GITHUB}/TokeneadoElPana.zip"},
+    {"label": "Ver en GitHub", "url": f"https://github.com/{USUARIO_GITHUB}/{REPO_GITHUB}"},
+]
 
 
 def formato_miles(n):
@@ -624,6 +635,10 @@ class DiscordRPC(threading.Thread):
         with self._lock:
             self.pendiente = (detalles, estado, texto_imagen)
 
+    def forzar(self):
+        """Permite mandar el proximo cambio sin esperar (lo usa el conteo, que es lo importante)."""
+        self.ultimo_envio = min(self.ultimo_envio, time.time() - DISCORD_SEGUNDOS_ENTRE_CAMBIOS + 2)
+
     def apagar(self):
         self.activo = False
         self._cerrar()
@@ -647,6 +662,7 @@ class DiscordRPC(threading.Thread):
                     "state": estado,
                     "timestamps": {"start": self.inicio},
                     "assets": {"large_image": DISCORD_IMAGEN, "large_text": texto_imagen},
+                    "buttons": DISCORD_BOTONES,
                 }
                 try:
                     self._mandar(1, {"cmd": "SET_ACTIVITY",
@@ -764,7 +780,9 @@ class Superposicion:
         self.lector = LectorMando(self.mando_apretar, self.mando_soltar)
         self.lector.start()
         self.discord = None
+        self.indice_discord = 0
         self.iniciar_o_parar_discord()
+        self.root.after(DISCORD_SEGUNDOS_ROTACION * 1000, self.rotar_discord)
         self.mostrar_u_ocultar_foto()
         self.actualizar()
         self.programar_cambio_foto()
@@ -1503,11 +1521,37 @@ class Superposicion:
             self.discord.apagar()
             self.discord = None
 
-    def estado_discord(self):
+    def lineas_discord(self):
+        """Las distintas lineas que se van turnando abajo del estado."""
+        stats = calcular_estadisticas(self.filas, self.sesion, self.cfg)
+        logros = len(self.logros or {})
+        lineas = [f"Lleva {formato_miles(stats['total'])} cofres en total"]
+        if stats["hoy"]:
+            lineas.append(f"Hoy lleva {formato_miles(stats['hoy'])} cofres")
+        if logros:
+            lineas.append(f"Logros: {logros}/{len(LOGROS)}")
+        if stats["dia"] >= 5:
+            lineas.append(f"Récord en un día: {formato_miles(stats['dia'])} cofres")
+        if stats["racha"] >= 2:
+            lineas.append(f"Racha: {stats['racha']} días seguidos")
+        return lineas
+
+    def estado_discord(self, desde_conteo=True):
+        if not self.discord:
+            return
+        lineas = self.lineas_discord()
+        if desde_conteo:
+            # al contar un cofre se muestra el total al tiro
+            self.indice_discord = 0
+            self.discord.forzar()
+        linea = lineas[getattr(self, "indice_discord", 0) % len(lineas)]
+        self.discord.actualizar("El pana se está tokeneando", linea, f"{NOMBRE_APP} v{VERSION}")
+
+    def rotar_discord(self):
         if self.discord:
-            self.discord.actualizar("El pana se está tokeneando",
-                                    f"Lleva {formato_miles(len(self.filas))} cofres en total",
-                                    f"{NOMBRE_APP} v{VERSION}")
+            self.indice_discord = getattr(self, "indice_discord", 0) + 1
+            self.estado_discord(desde_conteo=False)
+        self.root.after(DISCORD_SEGUNDOS_ROTACION * 1000, self.rotar_discord)
 
     # --- logros ---
     def revisar_logros_inicio(self):
