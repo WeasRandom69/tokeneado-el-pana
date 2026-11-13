@@ -1,2 +1,2 @@
-1.2
-Nuevo boton "Tema" para cambiar la interfaz: Clasico, Tormenta, Neon y Arena.
+1.3
+Logros: 22 para desbloquear (algunos secretos), con aviso al conseguirlos.

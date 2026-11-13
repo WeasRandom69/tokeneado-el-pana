@@ -50,11 +50,16 @@ import keyboard
 from PIL import Image, ImageSequence, ImageTk
 
 NOMBRE_APP = "Tokeneado el pana"
-VERSION = "1.2"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
+VERSION = "1.3"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
 
 # Novedades de cada version: se le muestran al usuario UNA vez, apenas se actualiza.
 # En cada version nueva se agrega una entrada arriba.
 NOVEDADES = {
+    "1.3": [
+        "¡Logros! Hay 22 para desbloquear (algunos son secretos). Miralos con el boton \"Logros\".",
+        "Cuando desbloqueas uno aparece un aviso con sonido (se puede apagar).",
+        "Si ya tenias cofres contados, los logros de tu historial se desbloquean solos.",
+    ],
     "1.2": [
         "Nuevo boton \"Tema\": cambia la interfaz entre Clasico, Tormenta, Neon y Arena.",
         "El tema que elijas queda guardado para la proxima vez.",
@@ -413,6 +418,106 @@ class LectorMando(threading.Thread):
             time.sleep(1 / 60)
 
 
+# ======================================================================
+# Logros
+# ======================================================================
+ARCHIVO_LOGROS = os.path.join(CARPETA, "logros.json")
+
+# (id, nombre, descripcion, tipo, meta, secreto)
+# tipo: que estadistica se mira. secreto: no se muestra que es hasta desbloquearlo.
+LOGROS = [
+    ("primer_cofre", "¡Primer botin!", "Abre tu primer cofre.", "total", 1, False),
+    ("total_10", "Saqueador novato", "Abre 10 cofres en total.", "total", 10, False),
+    ("total_50", "Buscador de tesoros", "Abre 50 cofres en total.", "total", 50, False),
+    ("total_100", "Cazacofres", "Abre 100 cofres en total.", "total", 100, False),
+    ("total_500", "Tokeneado", "Abre 500 cofres en total.", "total", 500, False),
+    ("total_1000", "Tokeneado el pana", "Abre 1.000 cofres en total.", "total", 1000, False),
+    ("total_5000", "Leyenda del botin", "Abre 5.000 cofres en total.", "total", 5000, False),
+    ("dia_10", "Buen dia", "Abre 10 cofres en un mismo dia.", "dia", 10, False),
+    ("dia_25", "Dia dorado", "Abre 25 cofres en un mismo dia.", "dia", 25, False),
+    ("dia_50", "Maraton", "Abre 50 cofres en un mismo dia.", "dia", 50, False),
+    ("dia_100", "Imparable", "Abre 100 cofres en un mismo dia.", "dia", 100, False),
+    ("sesion_15", "Racha caliente", "Abre 15 cofres sin cerrar el contador.", "sesion", 15, False),
+    ("sesion_30", "En llamas", "Abre 30 cofres sin cerrar el contador.", "sesion", 30, False),
+    ("racha_3", "Constante", "Abre cofres 3 dias seguidos.", "racha", 3, False),
+    ("racha_7", "Semana perfecta", "Abre cofres 7 dias seguidos.", "racha", 7, False),
+    ("racha_30", "Adicto al loot", "Abre cofres 30 dias seguidos.", "racha", 30, False),
+    ("speed", "Speedrun", "Abre 5 cofres en menos de 2 minutos.", "speed", 1, False),
+    ("mando", "Jugador de sillon", "Abre 10 cofres con el mando.", "mando", 10, False),
+    ("temas", "Fashionista", "Prueba todos los temas.", "temas", len(ORDEN_TEMAS), False),
+    ("noche", "Noctambulo", "Abre un cofre entre las 00:00 y las 05:00.", "noche", 1, True),
+    ("madrugada", "Madrugador", "Abre un cofre entre las 05:00 y las 08:00.", "madrugada", 1, True),
+    ("nice", "Nice", "Llega a exactamente 69 cofres en total.", "nice", 1, True),
+]
+
+
+def leer_logros():
+    try:
+        with open(ARCHIVO_LOGROS, encoding="utf-8") as f:
+            datos = json.load(f)
+        return datos if isinstance(datos, dict) else {}
+    except (OSError, ValueError):
+        return None   # None = nunca se han revisado (primera vez con logros)
+
+
+def guardar_logros(desbloqueados):
+    try:
+        with open(ARCHIVO_LOGROS, "w", encoding="utf-8") as f:
+            json.dump(desbloqueados, f, indent=2, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def calcular_estadisticas(filas, sesion, cfg):
+    fechas = []
+    for fila in filas:
+        try:
+            fechas.append(datetime.fromisoformat(fila[0]))
+        except (ValueError, IndexError):
+            pass
+    por_dia = {}
+    for f in fechas:
+        clave = f.date()
+        por_dia[clave] = por_dia.get(clave, 0) + 1
+
+    # dias seguidos (la racha mas larga)
+    racha_max, racha, anterior = 0, 0, None
+    for dia in sorted(por_dia):
+        racha = racha + 1 if anterior and (dia - anterior).days == 1 else 1
+        racha_max = max(racha_max, racha)
+        anterior = dia
+
+    # 5 cofres en menos de 2 minutos
+    speed = 0
+    for i in range(len(fechas) - 4):
+        if (fechas[i + 4] - fechas[i]).total_seconds() <= 120:
+            speed = 1
+            break
+
+    return {
+        "total": len(filas),
+        "hoy": por_dia.get(date.today(), 0),
+        "dia": max(por_dia.values(), default=0),
+        "sesion": sesion,
+        "racha": racha_max,
+        "speed": speed,
+        "mando": int(cfg.get("cofres_mando", 0)),
+        "temas": len(set(cfg.get("temas_usados", [])) & set(ORDEN_TEMAS)),
+        "noche": int(any(0 <= f.hour < 5 for f in fechas)),
+        "madrugada": int(any(5 <= f.hour < 8 for f in fechas)),
+        "nice": int(len(filas) == 69),
+    }
+
+
+def progreso_logro(logro, stats):
+    _id, _nombre, _desc, tipo, meta, _secreto = logro
+    return min(stats.get(tipo, 0), meta), meta
+
+
+def logros_nuevos(stats, desbloqueados):
+    return [l for l in LOGROS if l[0] not in desbloqueados and progreso_logro(l, stats)[0] >= l[4]]
+
+
 # ---------- Ventana principal ----------
 class Superposicion:
     def __init__(self, root):
@@ -437,6 +542,10 @@ class Superposicion:
         self.capturando = None
         self.etiquetas_teclas = {}
         self.lbl_aviso_teclas = None
+        self.logros = leer_logros()
+        self.cola_avisos = []
+        self.aviso_activo = None
+        self.ventana_logros = None
         self.e_estado = {"apretada": False, "id": 0}       # tecla de cofre (teclado)
         self.mando_estado = {"apretada": False, "id": 0}   # boton de cofre (mando)
         self.etiquetas_mando = {}
@@ -461,6 +570,7 @@ class Superposicion:
         self.boton_chico(barra, "✕", self.salir, ROJO).pack(side="right", padx=2, pady=2)
         self.boton_chico(barra, "Teclas", self.abrir_teclas, AZUL).pack(side="right", padx=1, pady=2)
         self.boton_chico(barra, "Tema", self.siguiente_tema).pack(side="right", padx=1, pady=2)
+        self.boton_chico(barra, "Logros", self.abrir_logros).pack(side="right", padx=1, pady=2)
         self.boton_chico(barra, "Añadir", self.agregar_fotos, VERDE).pack(side="right", padx=1, pady=2)
 
         # Nombre de la app, arriba de las fotos
@@ -505,6 +615,7 @@ class Superposicion:
         self.revisar_mando_conectado()
         # Si se acaba de actualizar, mostrar las novedades una sola vez
         self.root.after(800, self.revisar_novedades)
+        self.root.after(1500, self.revisar_logros_inicio)
         # Buscar actualizacion en segundo plano (si no hay internet, no pasa nada)
         threading.Thread(target=self.hilo_buscar_actualizacion, daemon=True).start()
 
@@ -515,7 +626,8 @@ class Superposicion:
         self.cambiar_tema(ORDEN_TEMAS[(i + 1) % len(ORDEN_TEMAS)])
 
     def cambiar_tema(self, nuevo):
-        viejo = TEMAS[self.cfg.get("tema", "Clasico")]
+        viejo_nombre = self.cfg.get("tema", "Clasico")
+        viejo = TEMAS[viejo_nombre]
         nuevo_t = TEMAS[nuevo]
         # tabla color viejo -> color nuevo (comparando en RGB)
         tabla = {}
@@ -523,12 +635,15 @@ class Superposicion:
             tabla[self.root.winfo_rgb(viejo[rol])] = nuevo_t[rol]
         aplicar_tema_global(nuevo)
         self.cfg["tema"] = nuevo
+        usados = set(self.cfg.get("temas_usados", [])) | {viejo_nombre, nuevo}
+        self.cfg["temas_usados"] = sorted(usados)
         guardar_config(self.cfg)
         self.repintar(self.root, tabla)
         self.lbl_titulo.config(font=(FUENTE_TITULO, 13, "bold"))
         self.dibujar_foto()          # el fondo de las fotos usa el color del tema
         self.actualizar()
         self.mostrar_nombre_tema(nuevo)
+        self.revisar_logros()
 
     def repintar(self, widget, tabla):
         for opcion in ("bg", "fg", "activebackground", "activeforeground", "selectcolor",
@@ -572,7 +687,7 @@ class Superposicion:
                          relief="flat", bd=0, padx=7, pady=1, cursor="hand2")
 
     # --- tecla de cofre mantenida ---
-    def empezar_mantener(self, estado):
+    def empezar_mantener(self, estado, evento="sumar"):
         """Sirve para la tecla del teclado y para el boton del mando."""
         if estado["apretada"]:
             return   # Windows repite el evento mientras la tecla esta abajo
@@ -584,7 +699,7 @@ class Superposicion:
 
         def revisar():
             if estado["apretada"] and estado["id"] == mi_id:
-                eventos.put("sumar")
+                eventos.put(evento)
 
         segundos = max(0.1, float(self.cfg.get("segundos_cofre", 0.5)))
         threading.Timer(segundos, revisar).start()
@@ -608,7 +723,7 @@ class Superposicion:
                 eventos.put(accion)
         cofre = botones.get("cofre") or []
         if cofre and cofre[0] in nuevos:
-            self.empezar_mantener(self.mando_estado)
+            self.empezar_mantener(self.mando_estado, "sumar_mando")
 
     def mando_soltar(self, soltados, _apretados):
         cofre = self.cfg["mando"]["botones"].get("cofre") or []
@@ -1158,6 +1273,205 @@ class Superposicion:
         self.sesion += 1
         guardar_registro(self.filas)
         self.actualizar()
+        self.revisar_logros()
+
+    # --- logros ---
+    def revisar_logros_inicio(self):
+        """La primera vez con logros, se revisa el historial y se avisa con un resumen."""
+        if self.logros is None:
+            self.logros = {}
+            nuevos = self.desbloquear(silencioso=True)
+            if nuevos:
+                self.encolar_aviso("¡Logros de tu historial!",
+                                   f"Desbloqueaste {len(nuevos)} logro(s) con los cofres que ya tenias.")
+            guardar_logros(self.logros)
+        else:
+            self.revisar_logros()
+
+    def revisar_logros(self):
+        if self.logros is None:
+            return
+        self.desbloquear(silencioso=False)
+
+    def desbloquear(self, silencioso):
+        stats = calcular_estadisticas(self.filas, self.sesion, self.cfg)
+        nuevos = logros_nuevos(stats, self.logros)
+        if not nuevos:
+            return []
+        hoy = date.today().isoformat()
+        for logro in nuevos:
+            self.logros[logro[0]] = hoy
+            if not silencioso:
+                self.encolar_aviso(logro[1], logro[2])
+        guardar_logros(self.logros)
+        self.refrescar_logros()
+        return nuevos
+
+    def encolar_aviso(self, titulo, texto):
+        self.cola_avisos.append((titulo, texto))
+        if not self.aviso_activo:
+            self.mostrar_siguiente_aviso()
+
+    def mostrar_siguiente_aviso(self):
+        if not self.cola_avisos:
+            self.aviso_activo = None
+            return
+        titulo, texto = self.cola_avisos.pop(0)
+        if self.cfg.get("sonido_logros", True):
+            try:
+                import winsound
+                winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS | winsound.SND_ASYNC)
+            except Exception:
+                pass
+        v = tk.Toplevel(self.root)
+        self.aviso_activo = v
+        v.overrideredirect(True)
+        v.attributes("-topmost", True)
+        v.attributes("-alpha", 0.0)
+        v.configure(bg=DORADO)
+        caja = tk.Frame(v, bg=BARRA)
+        caja.pack(padx=2, pady=2)
+        tk.Label(caja, text="★", font=("Segoe UI", 22, "bold"), fg=DORADO, bg=BARRA
+                 ).pack(side="left", padx=(12, 6), pady=8)
+        textos = tk.Frame(caja, bg=BARRA)
+        textos.pack(side="left", padx=(0, 14), pady=8)
+        tk.Label(textos, text="LOGRO DESBLOQUEADO", font=("Segoe UI", 7, "bold"), fg=GRIS, bg=BARRA,
+                 anchor="w").pack(fill="x")
+        tk.Label(textos, text=titulo, font=(FUENTE_TITULO, 12, "bold"), fg=DORADO, bg=BARRA,
+                 anchor="w").pack(fill="x")
+        tk.Label(textos, text=texto, font=("Segoe UI", 9), fg=TEXTO, bg=BARRA, anchor="w",
+                 justify="left", wraplength=240).pack(fill="x")
+        v.update_idletasks()
+        # debajo del contador; si no cabe, arriba
+        x = self.root.winfo_x()
+        y = self.root.winfo_y() + self.root.winfo_height() + 8
+        if y + v.winfo_height() > self.root.winfo_screenheight():
+            y = max(0, self.root.winfo_y() - v.winfo_height() - 8)
+        v.geometry(f"+{x}+{y}")
+        v.bind("<Button-1>", lambda e: self.cerrar_aviso(v))
+
+        def aparecer(a=0.0):
+            if not v.winfo_exists():
+                return
+            a = min(0.97, a + 0.12)
+            v.attributes("-alpha", a)
+            if a < 0.97:
+                v.after(25, aparecer, a)
+            else:
+                v.after(3800, lambda: self.cerrar_aviso(v))
+
+        aparecer()
+
+    def cerrar_aviso(self, v):
+        if getattr(v, "_cerrando", False) or not v.winfo_exists():
+            return
+        v._cerrando = True
+
+        def desaparecer(a=0.97):
+            if not v.winfo_exists():
+                return
+            a -= 0.12
+            if a <= 0:
+                v.destroy()
+                self.root.after(200, self.mostrar_siguiente_aviso)
+                return
+            v.attributes("-alpha", a)
+            v.after(25, desaparecer, a)
+
+        desaparecer()
+
+    def abrir_logros(self):
+        if self.ventana_logros and self.ventana_logros.winfo_exists():
+            self.ventana_logros.lift()
+            return
+        v = tk.Toplevel(self.root)
+        self.ventana_logros = v
+        v.title(f"{NOMBRE_APP} - Logros")
+        v.configure(bg=FONDO)
+        v.attributes("-topmost", True)
+        v.resizable(False, False)
+        v.geometry(f"+{self.root.winfo_x() + 30}+{self.root.winfo_y() + 30}")
+        v.protocol("WM_DELETE_WINDOW", self.cerrar_logros)
+
+        tk.Label(v, text="Logros", font=(FUENTE_TITULO, 15, "bold"), fg=DORADO, bg=FONDO
+                 ).pack(pady=(12, 0))
+        self.lbl_resumen_logros = tk.Label(v, font=("Segoe UI", 9, "bold"), fg=TEXTO, bg=FONDO)
+        self.lbl_resumen_logros.pack()
+        self.barra_logros = tk.Canvas(v, width=320, height=10, bg=BARRA, highlightthickness=0)
+        self.barra_logros.pack(pady=(4, 2))
+        self.lbl_stats_logros = tk.Label(v, font=("Segoe UI", 8), fg=GRIS, bg=FONDO, justify="center")
+        self.lbl_stats_logros.pack(pady=(2, 6))
+
+        # lista con scroll
+        marco = tk.Frame(v, bg=FONDO)
+        marco.pack(padx=10)
+        lienzo = tk.Canvas(marco, width=340, height=380, bg=FONDO, highlightthickness=0)
+        barra = tk.Scrollbar(marco, orient="vertical", command=lienzo.yview)
+        self.lista_logros = tk.Frame(lienzo, bg=FONDO)
+        self.lista_logros.bind("<Configure>", lambda e: lienzo.configure(scrollregion=lienzo.bbox("all")))
+        lienzo.create_window((0, 0), window=self.lista_logros, anchor="nw")
+        lienzo.configure(yscrollcommand=barra.set)
+        lienzo.pack(side="left")
+        barra.pack(side="right", fill="y")
+        v.bind("<MouseWheel>", lambda e: lienzo.yview_scroll(-1 if e.delta > 0 else 1, "units"))
+
+        self.var_sonido = tk.BooleanVar(value=bool(self.cfg.get("sonido_logros", True)))
+        tk.Checkbutton(v, text="Sonido al desbloquear", variable=self.var_sonido,
+                       command=self.guardar_sonido, font=("Segoe UI", 9), fg=TEXTO, bg=FONDO,
+                       selectcolor=BARRA, activebackground=FONDO, activeforeground=TEXTO
+                       ).pack(pady=(6, 0))
+        self.boton_chico(v, "Cerrar", self.cerrar_logros, VERDE).pack(pady=(4, 12))
+        self.refrescar_logros()
+
+    def guardar_sonido(self):
+        self.cfg["sonido_logros"] = bool(self.var_sonido.get())
+        guardar_config(self.cfg)
+
+    def refrescar_logros(self):
+        if not (self.ventana_logros and self.ventana_logros.winfo_exists()):
+            return
+        logros = self.logros or {}
+        stats = calcular_estadisticas(self.filas, self.sesion, self.cfg)
+        hechos = sum(1 for l in LOGROS if l[0] in logros)
+        self.lbl_resumen_logros.config(text=f"{hechos} de {len(LOGROS)} desbloqueados")
+        self.barra_logros.delete("all")
+        self.barra_logros.create_rectangle(0, 0, 320 * hechos / len(LOGROS), 10, fill=DORADO, width=0)
+        self.lbl_stats_logros.config(text=(
+            f"Total: {stats['total']}   ·   Hoy: {stats['hoy']}   ·   Record en un dia: {stats['dia']}\n"
+            f"Racha mas larga: {stats['racha']} dia(s)   ·   Con mando: {stats['mando']}"))
+        for hijo in self.lista_logros.winfo_children():
+            hijo.destroy()
+        # primero los desbloqueados, despues los que faltan
+        orden = sorted(LOGROS, key=lambda l: l[0] not in logros)
+        for logro in orden:
+            lid, nombre, desc, _tipo, meta, secreto = logro
+            hecho = lid in logros
+            fila = tk.Frame(self.lista_logros, bg=BARRA)
+            fila.pack(fill="x", pady=2)
+            tk.Label(fila, text="★" if hecho else "☆", font=("Segoe UI", 16, "bold"),
+                     fg=DORADO if hecho else GRIS, bg=BARRA, width=2).pack(side="left", padx=(6, 2))
+            textos = tk.Frame(fila, bg=BARRA)
+            textos.pack(side="left", fill="x", expand=True, pady=4)
+            if secreto and not hecho:
+                nombre, desc = "???", "Logro secreto."
+            tk.Label(textos, text=nombre, font=("Segoe UI", 10, "bold"),
+                     fg=DORADO if hecho else TEXTO, bg=BARRA, anchor="w").pack(fill="x")
+            tk.Label(textos, text=desc, font=("Segoe UI", 8), fg=GRIS, bg=BARRA, anchor="w",
+                     justify="left", wraplength=230).pack(fill="x")
+            if hecho:
+                derecha = f"{logros[lid]}"
+            elif secreto or meta == 1:
+                derecha = ""
+            else:
+                actual, meta = progreso_logro(logro, stats)
+                derecha = f"{actual}/{meta}"
+            tk.Label(fila, text=derecha, font=("Segoe UI", 8, "bold"), fg=GRIS, bg=BARRA, width=10
+                     ).pack(side="right", padx=6)
+
+    def cerrar_logros(self):
+        if self.ventana_logros:
+            self.ventana_logros.destroy()
+        self.ventana_logros = None
 
     def restar(self):
         if self.filas and self.sesion > 0:
@@ -1178,6 +1492,10 @@ class Superposicion:
             if self.capturando:
                 continue
             if evento == "sumar":
+                self.sumar()
+            elif evento == "sumar_mando":
+                self.cfg["cofres_mando"] = int(self.cfg.get("cofres_mando", 0)) + 1
+                guardar_config(self.cfg)
                 self.sumar()
             elif evento == "restar":
                 self.restar()
