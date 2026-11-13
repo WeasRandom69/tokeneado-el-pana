@@ -50,11 +50,18 @@ import keyboard
 from PIL import Image, ImageSequence, ImageTk
 
 NOMBRE_APP = "Tokeneado el pana"
-VERSION = "1.0"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
+VERSION = "1.2"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
 
 # Novedades de cada version: se le muestran al usuario UNA vez, apenas se actualiza.
 # En cada version nueva se agrega una entrada arriba.
 NOVEDADES = {
+    "1.2": [
+        "Nuevo boton \"Tema\": cambia la interfaz entre Clasico, Tormenta, Neon y Arena.",
+        "El tema que elijas queda guardado para la proxima vez.",
+    ],
+    "1.1": [
+        "Version de prueba: si ves esto, las actualizaciones funcionan.",
+    ],
     "1.0": [
         "Actualizaciones automaticas: cuando haya algo nuevo te va a aparecer un aviso.",
         "Soporte para mando de Xbox (X mantenido = cofre).",
@@ -99,15 +106,42 @@ TAMANO_MIN, TAMANO_MAX = 120, 700
 EXTENSIONES = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")
 MAX_CUADROS_GIF = 300
 
-FONDO = "#141414"
-BARRA = "#262626"
-DORADO = "#ffd34d"
-GRIS = "#9a9a9a"
-VERDE = "#2e9e4f"
-ROJO = "#b33a3a"
-AZUL = "#2f6fb3"
+# ---------- Temas (interfaces) ----------
+# Cada tema define los mismos "roles" de color. Dentro de un tema los colores
+# tienen que ser todos distintos, asi se pueden cambiar en vivo.
+TEMAS = {
+    "Clasico": {"fondo": "#141414", "barra": "#262626", "acento": "#ffd34d", "gris": "#9a9a9a",
+                "verde": "#2e9e4f", "rojo": "#b33a3a", "azul": "#2f6fb3", "texto": "#ffffff",
+                "firma": "#6e6e6e", "boton": "#3a3a3a", "texto_boton": "#f7f7f7", "fuente_titulo": "Segoe UI"},
+    "Tormenta": {"fondo": "#1a1033", "barra": "#2a1a52", "acento": "#c77dff", "gris": "#a597cf",
+                 "verde": "#24875a", "rojo": "#c73a50", "azul": "#4a63e8", "texto": "#f3edff",
+                 "firma": "#7a6aa3", "boton": "#3d2a6e", "texto_boton": "#ffffff", "fuente_titulo": "Segoe UI Black"},
+    "Neon": {"fondo": "#05070d", "barra": "#0e1524", "acento": "#00f0ff", "gris": "#7f8ea8",
+             "verde": "#00915a", "rojo": "#e0206a", "azul": "#2a6be6", "texto": "#e8faff",
+             "firma": "#5b6b88", "boton": "#1b2740", "texto_boton": "#ffffff", "fuente_titulo": "Consolas"},
+    "Arena": {"fondo": "#f2e8d5", "barra": "#e0cfa9", "acento": "#a3480f", "gris": "#6e604a",
+              "verde": "#2f7d3a", "rojo": "#a8322b", "azul": "#2e5c99", "texto": "#2a2016",
+              "firma": "#8a7858", "boton": "#7a6440", "texto_boton": "#fffaf0", "fuente_titulo": "Georgia"},
+}
+ORDEN_TEMAS = ["Clasico", "Tormenta", "Neon", "Arena"]
+ROLES_COLOR = ["fondo", "barra", "acento", "gris", "verde", "rojo", "azul", "texto", "firma", "boton",
+               "texto_boton"]
+
+
+def aplicar_tema_global(nombre):
+    """Cambia las constantes de color que usa todo el programa."""
+    global FONDO, BARRA, DORADO, GRIS, VERDE, ROJO, AZUL, TEXTO, FIRMA, BOTON, TEXTO_BOTON, FUENTE_TITULO
+    t = TEMAS.get(nombre) or TEMAS["Clasico"]
+    FONDO, BARRA, DORADO, GRIS = t["fondo"], t["barra"], t["acento"], t["gris"]
+    VERDE, ROJO, AZUL, TEXTO = t["verde"], t["rojo"], t["azul"], t["texto"]
+    FIRMA, BOTON, FUENTE_TITULO = t["firma"], t["boton"], t["fuente_titulo"]
+    TEXTO_BOTON = t["texto_boton"]
+
+
+aplicar_tema_global("Clasico")
 
 CONFIG_INICIAL = {"tamano": 260, "opacidad": 0.92, "mostrar_foto": True, "x": 40, "y": 40,
+                  "tema": "Clasico",
                   "auto_cofre": True,       # contar solo al mantener la tecla de cofre
                   "segundos_cofre": 0.5,    # cuanto hay que mantenerla
                   "teclas": dict(TECLAS_INICIALES)}
@@ -384,6 +418,9 @@ class Superposicion:
     def __init__(self, root):
         self.root = root
         self.cfg = leer_config()
+        if self.cfg.get("tema") not in TEMAS:
+            self.cfg["tema"] = "Clasico"
+        aplicar_tema_global(self.cfg["tema"])
         self.filas = leer_registro()
         self.sesion = 0
         self.fotos = cargar_fotos()
@@ -423,10 +460,11 @@ class Superposicion:
             self.boton_chico(barra, texto, accion).pack(side="left", padx=1, pady=2)
         self.boton_chico(barra, "✕", self.salir, ROJO).pack(side="right", padx=2, pady=2)
         self.boton_chico(barra, "Teclas", self.abrir_teclas, AZUL).pack(side="right", padx=1, pady=2)
+        self.boton_chico(barra, "Tema", self.siguiente_tema).pack(side="right", padx=1, pady=2)
         self.boton_chico(barra, "Añadir", self.agregar_fotos, VERDE).pack(side="right", padx=1, pady=2)
 
         # Nombre de la app, arriba de las fotos
-        self.lbl_titulo = tk.Label(root, text=NOMBRE_APP, font=("Segoe UI", 13, "bold"),
+        self.lbl_titulo = tk.Label(root, text=NOMBRE_APP, font=(FUENTE_TITULO, 13, "bold"),
                                    fg=DORADO, bg=FONDO)
         self.lbl_titulo.pack(pady=(5, 0))
 
@@ -447,7 +485,7 @@ class Superposicion:
         self.lbl_mando = tk.Label(self.zona_contador, font=("Segoe UI", 8), fg=GRIS, bg=FONDO)
         self.lbl_mando.pack(pady=(0, 1))
         self.lbl_firma = tk.Label(self.zona_contador, text=f"creado x weasrandomexe  ·  v{VERSION}",
-                                  font=("Segoe UI", 7, "italic"), fg="#6e6e6e", bg=FONDO)
+                                  font=("Segoe UI", 7, "italic"), fg=FIRMA, bg=FONDO)
         self.lbl_firma.pack(pady=(0, 4))
 
         for w in (root, barra, self.lbl_titulo, self.lbl_foto, self.zona_contador, fila,
@@ -470,10 +508,67 @@ class Superposicion:
         # Buscar actualizacion en segundo plano (si no hay internet, no pasa nada)
         threading.Thread(target=self.hilo_buscar_actualizacion, daemon=True).start()
 
+    # --- temas ---
+    def siguiente_tema(self):
+        actual = self.cfg.get("tema", "Clasico")
+        i = ORDEN_TEMAS.index(actual) if actual in ORDEN_TEMAS else 0
+        self.cambiar_tema(ORDEN_TEMAS[(i + 1) % len(ORDEN_TEMAS)])
+
+    def cambiar_tema(self, nuevo):
+        viejo = TEMAS[self.cfg.get("tema", "Clasico")]
+        nuevo_t = TEMAS[nuevo]
+        # tabla color viejo -> color nuevo (comparando en RGB)
+        tabla = {}
+        for rol in ROLES_COLOR:
+            tabla[self.root.winfo_rgb(viejo[rol])] = nuevo_t[rol]
+        aplicar_tema_global(nuevo)
+        self.cfg["tema"] = nuevo
+        guardar_config(self.cfg)
+        self.repintar(self.root, tabla)
+        self.lbl_titulo.config(font=(FUENTE_TITULO, 13, "bold"))
+        self.dibujar_foto()          # el fondo de las fotos usa el color del tema
+        self.actualizar()
+        self.mostrar_nombre_tema(nuevo)
+
+    def repintar(self, widget, tabla):
+        for opcion in ("bg", "fg", "activebackground", "activeforeground", "selectcolor",
+                       "troughcolor", "highlightbackground"):
+            try:
+                valor = widget.cget(opcion)
+            except tk.TclError:
+                continue
+            if not valor:
+                continue
+            try:
+                rgb = self.root.winfo_rgb(valor)
+            except tk.TclError:
+                continue
+            if rgb in tabla:
+                try:
+                    widget.configure(**{opcion: tabla[rgb]})
+                except tk.TclError:
+                    pass
+        for hijo in widget.winfo_children():
+            self.repintar(hijo, tabla)
+
+    def mostrar_nombre_tema(self, nombre):
+        self.tema_mensaje = f"Tema: {nombre}"
+        if getattr(self, "timer_tema", None):
+            self.root.after_cancel(self.timer_tema)
+        self.actualizar()
+
+        def quitar():
+            self.tema_mensaje = None
+            self.timer_tema = None
+            self.actualizar()
+
+        self.timer_tema = self.root.after(1500, quitar)
+
     # --- elementos ---
-    def boton_chico(self, padre, texto, accion, color="#3a3a3a"):
+    def boton_chico(self, padre, texto, accion, color=None):
+        color = color or BOTON
         return tk.Button(padre, text=texto, command=accion, font=("Segoe UI", 9, "bold"),
-                         fg="white", bg=color, activebackground=color, activeforeground="white",
+                         fg=TEXTO_BOTON, bg=color, activebackground=color, activeforeground=TEXTO_BOTON,
                          relief="flat", bd=0, padx=7, pady=1, cursor="hand2")
 
     # --- tecla de cofre mantenida ---
@@ -573,7 +668,7 @@ class Superposicion:
 
         self.etiquetas_teclas = {}
         for i, accion in enumerate(TECLAS_INICIALES, start=1):
-            tk.Label(v, text=NOMBRES_ACCIONES[accion], font=("Segoe UI", 9), fg="white",
+            tk.Label(v, text=NOMBRES_ACCIONES[accion], font=("Segoe UI", 9), fg=TEXTO,
                      bg=FONDO, anchor="w").grid(row=i, column=0, sticky="w", padx=(12, 8), pady=2)
             lbl = tk.Label(v, text=mostrar_tecla(self.cfg["teclas"][accion]), width=12,
                            font=("Segoe UI", 9, "bold"), fg=DORADO, bg=BARRA)
@@ -590,8 +685,8 @@ class Superposicion:
         fila += 1
         self.var_usar_mando = tk.BooleanVar(value=bool(self.cfg["mando"]["usar"]))
         tk.Checkbutton(v, text="Usar el mando", variable=self.var_usar_mando,
-                       command=self.guardar_usar_mando, font=("Segoe UI", 9), fg="white", bg=FONDO,
-                       selectcolor=BARRA, activebackground=FONDO, activeforeground="white"
+                       command=self.guardar_usar_mando, font=("Segoe UI", 9), fg=TEXTO, bg=FONDO,
+                       selectcolor=BARRA, activebackground=FONDO, activeforeground=TEXTO
                        ).grid(row=fila, column=0, sticky="w", padx=10)
         texto, color = self.texto_estado_mando()
         self.lbl_estado_mando = tk.Label(v, text=texto, font=("Segoe UI", 8, "bold"), fg=color, bg=FONDO)
@@ -599,7 +694,7 @@ class Superposicion:
         fila += 1
         self.etiquetas_mando = {}
         for accion in MANDO_INICIAL:
-            tk.Label(v, text=NOMBRES_ACCIONES[accion], font=("Segoe UI", 9), fg="white",
+            tk.Label(v, text=NOMBRES_ACCIONES[accion], font=("Segoe UI", 9), fg=TEXTO,
                      bg=FONDO, anchor="w").grid(row=fila, column=0, sticky="w", padx=(12, 8), pady=2)
             lbl = tk.Label(v, text=mostrar_combo(self.cfg["mando"]["botones"][accion]), width=12,
                            font=("Segoe UI", 9, "bold"), fg=DORADO, bg=BARRA)
@@ -625,15 +720,15 @@ class Superposicion:
 
         self.var_auto = tk.BooleanVar(value=bool(self.cfg.get("auto_cofre", True)))
         tk.Checkbutton(cofre, text="Contar solo al mantener la tecla", variable=self.var_auto,
-                       command=self.guardar_ajustes_cofre, font=("Segoe UI", 9), fg="white", bg=BARRA,
-                       selectcolor=FONDO, activebackground=BARRA, activeforeground="white",
+                       command=self.guardar_ajustes_cofre, font=("Segoe UI", 9), fg=TEXTO, bg=BARRA,
+                       selectcolor=FONDO, activebackground=BARRA, activeforeground=TEXTO,
                        anchor="w").pack(fill="x", padx=8)
 
-        tk.Label(cofre, text="Segundos que hay que mantenerla:", font=("Segoe UI", 9), fg="white",
+        tk.Label(cofre, text="Segundos que hay que mantenerla:", font=("Segoe UI", 9), fg=TEXTO,
                  bg=BARRA, anchor="w").pack(fill="x", padx=10, pady=(4, 0))
         self.var_segundos = tk.DoubleVar(value=float(self.cfg.get("segundos_cofre", 0.5)))
         tk.Scale(cofre, variable=self.var_segundos, from_=0.2, to=2.0, resolution=0.1,
-                 orient="horizontal", length=300, bg=BARRA, fg="white", troughcolor=FONDO,
+                 orient="horizontal", length=300, bg=BARRA, fg=TEXTO, troughcolor=FONDO,
                  highlightthickness=0, activebackground=DORADO,
                  command=lambda _v: self.guardar_ajustes_cofre()).pack(padx=10)
         tk.Label(cofre, text="Menos tiempo = cuenta mas rapido, pero puede contar cosas cortas.\n"
@@ -679,7 +774,7 @@ class Superposicion:
         self.lector.pausado = True
         self.captura_mando = set()
         self.captura_inicio = time.monotonic()
-        self.etiquetas_mando[accion].config(text="Aprieta...", fg="white")
+        self.etiquetas_mando[accion].config(text="Aprieta...", fg=TEXTO)
         if accion == "cofre":
             msg = "Aprieta UN boton en el mando y suelta."
         else:
@@ -739,7 +834,7 @@ class Superposicion:
             return
         self.capturando = accion
         keyboard.unhook_all()   # para que la tecla que apretes no active nada
-        self.etiquetas_teclas[accion].config(text="Aprieta...", fg="white")
+        self.etiquetas_teclas[accion].config(text="Aprieta...", fg=TEXTO)
         self.lbl_aviso_teclas.config(text="Aprieta la tecla nueva (Esc para cancelar)", fg=GRIS)
 
         def hilo():
@@ -968,14 +1063,14 @@ class Superposicion:
         for ver in versiones:
             caja = tk.Frame(v, bg=BARRA)
             caja.pack(fill="x", padx=16, pady=4)
-            tk.Label(caja, text=f"Novedades {ver}", font=("Segoe UI", 10, "bold"), fg="white",
+            tk.Label(caja, text=f"Novedades {ver}", font=("Segoe UI", 10, "bold"), fg=TEXTO,
                      bg=BARRA, anchor="w").pack(fill="x", padx=10, pady=(8, 2))
             for punto in NOVEDADES[ver]:
-                tk.Label(caja, text=f"•  {punto}", font=("Segoe UI", 9), fg="white", bg=BARRA,
+                tk.Label(caja, text=f"•  {punto}", font=("Segoe UI", 9), fg=TEXTO, bg=BARRA,
                          anchor="w", justify="left", wraplength=320).pack(fill="x", padx=12, pady=1)
             tk.Frame(caja, bg=BARRA, height=6).pack()
         tk.Label(v, text="creado x weasrandomexe", font=("Segoe UI", 7, "italic"),
-                 fg="#6e6e6e", bg=FONDO).pack(pady=(6, 0))
+                 fg=FIRMA, bg=FONDO).pack(pady=(6, 0))
         self.boton_chico(v, "¡Bacan!", v.destroy, VERDE).pack(pady=(6, 14))
 
     def ofrecer_actualizacion(self, nueva, notas):
@@ -988,13 +1083,13 @@ class Superposicion:
         tk.Label(v, text="¡Hay una version nueva!", font=("Segoe UI", 12, "bold"),
                  fg=DORADO, bg=FONDO).pack(padx=20, pady=(14, 2))
         tk.Label(v, text=f"Tienes la {VERSION}  →  nueva: {nueva}", font=("Segoe UI", 9),
-                 fg="white", bg=FONDO).pack(padx=20)
+                 fg=TEXTO, bg=FONDO).pack(padx=20)
         if notas:
             tk.Label(v, text=notas, font=("Segoe UI", 9), fg=GRIS, bg=FONDO, justify="left",
                      wraplength=320).pack(padx=20, pady=(8, 0))
         tk.Label(v, text="Tu conteo, fotos y teclas no se borran.", font=("Segoe UI", 8),
                  fg=GRIS, bg=FONDO).pack(padx=20, pady=(8, 0))
-        estado = tk.Label(v, text="", font=("Segoe UI", 9, "bold"), fg="white", bg=FONDO,
+        estado = tk.Label(v, text="", font=("Segoe UI", 9, "bold"), fg=TEXTO, bg=FONDO,
                           wraplength=320)
         estado.pack(padx=20, pady=(6, 0))
         botones = tk.Frame(v, bg=FONDO)
@@ -1003,7 +1098,7 @@ class Superposicion:
         def actualizar():
             for b in botones.winfo_children():
                 b.config(state="disabled")
-            estado.config(text="Descargando...", fg="white")
+            estado.config(text="Descargando...", fg=TEXTO)
             v.update()
             try:
                 instalar_actualizacion()
@@ -1033,6 +1128,8 @@ class Superposicion:
         if self.confirmando:
             tecla = mostrar_tecla(self.cfg["teclas"]["reiniciar"])
             self.lbl_info.config(text=f"¿Borrar TODO? Aprieta {tecla} otra vez", fg=ROJO)
+        elif getattr(self, "tema_mensaje", None):
+            self.lbl_info.config(text=self.tema_mensaje, fg=DORADO)
         else:
             self.lbl_info.config(text=f"Hoy: {self.total_hoy()}   ·   Total: {len(self.filas)}", fg=GRIS)
 

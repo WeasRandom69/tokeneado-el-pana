@@ -1,2 +1,2 @@
-1.0
-Primera version con actualizacion online.
+1.2
+Nuevo boton "Tema" para cambiar la interfaz: Clasico, Tormenta, Neon y Arena.
