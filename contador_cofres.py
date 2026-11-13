@@ -50,11 +50,16 @@ import keyboard
 from PIL import Image, ImageSequence, ImageTk
 
 NOMBRE_APP = "Tokeneado el pana"
-VERSION = "1.3"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
+VERSION = "1.4"   # subir este numero en cada version nueva (y el de version.txt en GitHub)
 
 # Novedades de cada version: se le muestran al usuario UNA vez, apenas se actualiza.
 # En cada version nueva se agrega una entrada arriba.
 NOVEDADES = {
+    "1.4": [
+        "Nuevo tamano: arrastra la esquina ◢ de abajo a la derecha para agrandar o achicar todo.",
+        "El titulo y el numero ahora crecen junto con la ventana.",
+        "Se sacaron los botones - y + de arriba.",
+    ],
     "1.3": [
         "¡Logros! Hay 22 para desbloquear (algunos son secretos). Miralos con el boton \"Logros\".",
         "Cuando desbloqueas uno aparece un aviso con sonido (se puede apagar).",
@@ -564,8 +569,7 @@ class Superposicion:
         barra = tk.Frame(root, bg=BARRA)
         barra.pack(fill="x")
         for texto, accion in (("◀", self.foto_anterior), ("▶", self.foto_siguiente),
-                              ("Foto", self.alternar_foto), ("−", lambda: self.cambiar_tamano(-30)),
-                              ("+", lambda: self.cambiar_tamano(30))):
+                              ("Foto", self.alternar_foto)):
             self.boton_chico(barra, texto, accion).pack(side="left", padx=1, pady=2)
         self.boton_chico(barra, "✕", self.salir, ROJO).pack(side="right", padx=2, pady=2)
         self.boton_chico(barra, "Teclas", self.abrir_teclas, AZUL).pack(side="right", padx=1, pady=2)
@@ -605,6 +609,20 @@ class Superposicion:
             w.bind("<ButtonRelease-1>", lambda e: self.guardar_posicion())
             w.bind("<MouseWheel>", self.rueda)
 
+        # Esquina para cambiar el tamano arrastrando (abajo a la derecha)
+        self.agarrador = tk.Label(root, text="◢", font=("Segoe UI", 12), fg=GRIS, bg=FONDO,
+                                  cursor="size_nw_se", bd=0, padx=0, pady=0)
+        self.agarrador.place(relx=1.0, rely=1.0, anchor="se")
+        self.agarrador.lift()
+        self.agarrador.bind("<ButtonPress-1>", self.empezar_redimension)
+        self.agarrador.bind("<B1-Motion>", self.redimensionar)
+        self.agarrador.bind("<ButtonRelease-1>", self.terminar_redimension)
+        self.agarrador.bind("<Enter>", lambda e: self.agarrador.config(fg=DORADO))
+        self.agarrador.bind("<Leave>", lambda e: self.agarrador.config(fg=GRIS))
+        self.redim = None
+        self.timer_redim = None
+        self.aplicar_fuentes()
+
         self.registrar_teclas()
         self.lector = LectorMando(self.mando_apretar, self.mando_soltar)
         self.lector.start()
@@ -639,7 +657,7 @@ class Superposicion:
         self.cfg["temas_usados"] = sorted(usados)
         guardar_config(self.cfg)
         self.repintar(self.root, tabla)
-        self.lbl_titulo.config(font=(FUENTE_TITULO, 13, "bold"))
+        self.aplicar_fuentes()
         self.dibujar_foto()          # el fondo de las fotos usa el color del tema
         self.actualizar()
         self.mostrar_nombre_tema(nuevo)
@@ -1013,7 +1031,8 @@ class Superposicion:
         self.lbl_estado_mando = None
 
     # --- fotos y GIFs ---
-    def dibujar_foto(self):
+    def dibujar_foto(self, rapido=False):
+        """rapido=True: solo el cuadro actual, sin animar (mientras se arrastra la esquina)."""
         if self.timer_animacion:
             self.root.after_cancel(self.timer_animacion)
             self.timer_animacion = None
@@ -1021,6 +1040,8 @@ class Superposicion:
             return
         lado = int(self.cfg["tamano"])
         _nombre, cuadros, duraciones = self.fotos[self.indice % len(self.fotos)]
+        if rapido:
+            cuadros = [cuadros[self.cuadro_actual % len(cuadros)]]
         self.cuadros_tk = []
         for cuadro in cuadros:
             img = cuadro.copy()
@@ -1114,7 +1135,52 @@ class Superposicion:
     def cambiar_tamano(self, delta):
         self.cfg["tamano"] = max(TAMANO_MIN, min(TAMANO_MAX, self.cfg["tamano"] + delta))
         self.dibujar_foto()
+        self.aplicar_fuentes()
         guardar_config(self.cfg)
+
+    def aplicar_fuentes(self):
+        """El titulo y el numero crecen o se achican junto con la ventana."""
+        escala = float(self.cfg["tamano"]) / 260.0
+        self.lbl_titulo.config(font=(FUENTE_TITULO, max(10, min(26, round(13 * escala))), "bold"))
+        self.lbl_sesion.config(font=("Segoe UI", max(16, min(56, round(26 * escala))), "bold"))
+
+    # --- esquina para redimensionar ---
+    def empezar_redimension(self, evento):
+        self.redim = (evento.x_root, evento.y_root, self.cfg["tamano"])
+        return "break"   # que no se mueva la ventana
+
+    def redimensionar(self, evento):
+        if not self.redim:
+            return "break"
+        x0, y0, inicio = self.redim
+        # se usa el movimiento mas grande (en diagonal se siente natural)
+        dx, dy = evento.x_root - x0, evento.y_root - y0
+        delta = dx if abs(dx) >= abs(dy) else dy
+        nuevo = max(TAMANO_MIN, min(TAMANO_MAX, int(inicio + delta)))
+        if nuevo != self.cfg["tamano"]:
+            self.cfg["tamano"] = nuevo
+            if self.timer_redim:
+                self.root.after_cancel(self.timer_redim)
+            # se redibuja como maximo ~30 veces por segundo para que no se trabe
+            self.timer_redim = self.root.after(30, self.redibujar_rapido)
+        return "break"
+
+    def redibujar_rapido(self):
+        self.timer_redim = None
+        self.dibujar_foto(rapido=True)
+        self.aplicar_fuentes()
+        self.agarrador.lift()
+
+    def terminar_redimension(self, _evento):
+        self.redim = None
+        if self.timer_redim:
+            self.root.after_cancel(self.timer_redim)
+            self.timer_redim = None
+        self.dibujar_foto()          # ahora si, con animacion si es GIF
+        self.aplicar_fuentes()
+        self.agarrador.lift()
+        guardar_config(self.cfg)
+        return "break"
 
     def cambiar_opacidad(self, delta):
         self.cfg["opacidad"] = round(max(0.3, min(1.0, self.cfg["opacidad"] + delta)), 2)
